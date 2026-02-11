@@ -50,6 +50,7 @@ class SwarmOrchestrator:
         plan: SwarmPlan,
         cwd: str,
         max_concurrent: int = 4,
+        max_budget_usd: float = 5.0,
         on_update: OnUpdate | None = None,
         on_agent_event: OnAgentEvent | None = None,
         recorder: SessionRecorder | None = None,
@@ -57,6 +58,7 @@ class SwarmOrchestrator:
         self.plan = plan
         self.cwd = cwd
         self.max_concurrent = max_concurrent
+        self.max_budget_usd = max_budget_usd
         self.on_update = on_update or (lambda: None)
         self.on_agent_event = on_agent_event or (lambda *_: None)
         self.recorder = recorder
@@ -67,6 +69,7 @@ class SwarmOrchestrator:
         self.conflicts: list[FileConflict] = []
         self.total_cost: float = 0.0
         self.start_time: float = 0.0
+        self._budget_exceeded: bool = False
 
         # Map file paths to agent IDs currently modifying them
         self._file_locks: dict[str, str] = {}
@@ -74,8 +77,15 @@ class SwarmOrchestrator:
         # Task lookup
         self._tasks: dict[str, SwarmTask] = {t.id: t for t in plan.tasks}
 
+    @property
+    def active_agent_count(self) -> int:
+        """Count agents currently working."""
+        return sum(1 for a in self.agents.values() if a.status == AgentStatus.WORKING)
+
     async def run(self) -> SwarmResult:
         """Execute all tasks in the plan, respecting dependencies.
+
+        Enforces budget limits — cancels remaining tasks if total cost exceeds max_budget_usd.
 
         Returns:
             SwarmResult with completed/failed tasks and statistics
@@ -84,10 +94,23 @@ class SwarmOrchestrator:
 
         async with anyio.create_task_group() as tg:
             while not self._all_done():
+                # Budget enforcement: cancel pending tasks if over budget
+                if self.total_cost >= self.max_budget_usd and not self._budget_exceeded:
+                    self._budget_exceeded = True
+                    self._cancel_pending_tasks(
+                        reason=f"Budget exceeded: ${self.total_cost:.4f} >= ${self.max_budget_usd:.2f}"
+                    )
+                    self.on_update()
+                    # Wait for running agents to finish, but don't launch new ones
+                    if self.active_agent_count == 0:
+                        break
+                    await anyio.sleep(0.5)
+                    continue
+
                 ready_tasks = self._get_ready_tasks()
 
                 for task in ready_tasks:
-                    if len(self.agents) >= self.max_concurrent:
+                    if self.active_agent_count >= self.max_concurrent:
                         break
                     # Check for file conflicts before launching
                     conflict = self._check_file_conflict(task)
@@ -271,3 +294,11 @@ class SwarmOrchestrator:
                 deps_met = all(d in self.completed_task_ids for d in task.dependencies)
                 if deps_met:
                     task.status = TaskStatus.PENDING
+
+    def _cancel_pending_tasks(self, reason: str) -> None:
+        """Cancel all pending and blocked tasks (e.g., when budget is exceeded)."""
+        for task in self.plan.tasks:
+            if task.status in (TaskStatus.PENDING, TaskStatus.BLOCKED):
+                task.status = TaskStatus.CANCELLED
+                task.error = reason
+        self.on_agent_event("orchestrator", "budget_exceeded", {"reason": reason})

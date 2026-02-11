@@ -202,7 +202,10 @@ class SwarmUI:
         # Summary panel
         completed = len(result.completed_tasks)
         failed = len(result.failed_tasks)
-        total = completed + failed
+        cancelled = sum(
+            1 for t in result.plan.tasks if t.status == TaskStatus.CANCELLED
+        )
+        total = result.plan.task_count
         success_rate = (completed / total * 100) if total > 0 else 0
 
         summary = Table(title="Swarm Results", show_lines=True)
@@ -211,6 +214,8 @@ class SwarmUI:
 
         summary.add_row("Tasks Completed", f"[green]{completed}[/green]")
         summary.add_row("Tasks Failed", f"[red]{failed}[/red]" if failed else "0")
+        if cancelled:
+            summary.add_row("Tasks Cancelled", f"[yellow]{cancelled}[/yellow]")
         summary.add_row("Success Rate", f"{success_rate:.0f}%")
         summary.add_row("Total Cost", f"${result.total_cost_usd:.4f}")
         summary.add_row("Duration", f"{result.total_duration_ms / 1000:.1f}s")

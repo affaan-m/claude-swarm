@@ -220,6 +220,7 @@ async def _run_swarm(
         plan=plan,
         cwd=cwd,
         max_concurrent=max_agents,
+        max_budget_usd=budget,
         recorder=recorder,
     )
 
