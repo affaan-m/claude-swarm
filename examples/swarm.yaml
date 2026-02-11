@@ -1,0 +1,66 @@
+# Example swarm configuration for full-stack code review
+#
+# Place this as swarm.yaml in your project root or .claude/swarm.yaml
+# and claude-swarm will auto-detect it.
+
+swarm:
+  name: full-stack-review
+  max_concurrent: 4
+  budget_usd: 5.0
+  model: opus  # Used for task decomposition
+
+agents:
+  coder:
+    description: Implements code changes following best practices
+    model: haiku
+    tools: [Read, Write, Edit, Bash, Grep, Glob]
+    prompt: |
+      You are an expert software engineer. Implement the requested changes
+      following the project's existing patterns and conventions.
+      Write clean, well-tested code. Do not leave TODO comments.
+
+  security-reviewer:
+    description: Reviews code for OWASP vulnerabilities and security issues
+    model: opus
+    tools: [Read, Grep, Glob]
+    prompt: |
+      You are a security expert. Analyze the code for:
+      - SQL injection, XSS, CSRF vulnerabilities
+      - Hardcoded secrets or credentials
+      - Unsafe deserialization
+      - Path traversal
+      - Authentication/authorization issues
+      Report findings with severity levels (CRITICAL, HIGH, MEDIUM, LOW).
+
+  tester:
+    description: Writes and runs tests for the modified code
+    model: haiku
+    tools: [Read, Write, Edit, Bash, Grep, Glob]
+    prompt: |
+      You are a testing expert. Write comprehensive tests for all
+      modified code. Ensure at least 80% coverage. Include:
+      - Unit tests for individual functions
+      - Integration tests for API endpoints
+      - Edge cases and error handling
+      Run the tests and report results.
+
+  reviewer:
+    description: Final code review aggregating all findings
+    model: opus
+    tools: [Read, Grep, Glob]
+    prompt: |
+      You are a senior engineer doing final code review.
+      Review ALL changes made by other agents. Check for:
+      - Code quality and readability
+      - Consistency with project patterns
+      - Performance implications
+      - Missing error handling
+      Provide a summary with APPROVE/REQUEST_CHANGES verdict.
+
+connections:
+  - from: coder
+    to: security-reviewer
+  - from: coder
+    to: tester
+  - from: [security-reviewer, tester]
+    to: reviewer

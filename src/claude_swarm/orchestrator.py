@@ -21,6 +21,7 @@ from claude_agent_sdk.types import (
     ToolUseBlock,
 )
 
+from .session import SessionRecorder
 from .types import (
     AgentStatus,
     FileConflict,
@@ -51,12 +52,14 @@ class SwarmOrchestrator:
         max_concurrent: int = 4,
         on_update: OnUpdate | None = None,
         on_agent_event: OnAgentEvent | None = None,
+        recorder: SessionRecorder | None = None,
     ) -> None:
         self.plan = plan
         self.cwd = cwd
         self.max_concurrent = max_concurrent
         self.on_update = on_update or (lambda: None)
         self.on_agent_event = on_agent_event or (lambda *_: None)
+        self.recorder = recorder
 
         # State tracking
         self.agents: dict[str, SwarmAgent] = {}
@@ -125,6 +128,8 @@ class SwarmOrchestrator:
         )
         self.agents[agent_id] = agent
         self.on_agent_event(agent_id, "started", {"task_id": task.id})
+        if self.recorder:
+            self.recorder.record_agent_started(agent_id, task.id, task.description)
         self.on_update()
 
         try:
@@ -155,6 +160,10 @@ class SwarmOrchestrator:
                             self.on_agent_event(
                                 agent_id, "tool_use", {"tool": block.name, "input": block.input}
                             )
+                            if self.recorder:
+                                self.recorder.record_tool_use(
+                                    agent_id, task.id, block.name, block.input
+                                )
                             self.on_update()
                 elif isinstance(message, ResultMessage):
                     task.cost_usd = message.total_cost_usd or 0.0
@@ -169,12 +178,18 @@ class SwarmOrchestrator:
             agent.status = AgentStatus.COMPLETED
             agent.cost_usd = task.cost_usd
             self.on_agent_event(agent_id, "completed", {"cost": task.cost_usd})
+            if self.recorder:
+                self.recorder.record_agent_completed(
+                    agent_id, task.id, task.cost_usd, task.duration_ms
+                )
 
         except Exception as exc:
             task.status = TaskStatus.FAILED
             task.error = str(exc)
             agent.status = AgentStatus.FAILED
             self.on_agent_event(agent_id, "failed", {"error": str(exc)})
+            if self.recorder:
+                self.recorder.record_agent_failed(agent_id, task.id, str(exc))
 
         finally:
             self._unlock_files(task)
