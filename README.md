@@ -3,7 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/claude-swarm)](https://pypi.org/project/claude-swarm/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-30%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-44%20passing-brightgreen.svg)]()
 
 **Multi-agent orchestration for Claude Code** — decompose complex tasks into parallel subtasks, coordinate agents in real-time, and visualize everything in a rich terminal UI.
 
@@ -15,29 +15,32 @@ Built with the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk
 You: "Refactor auth module from Express middleware to Next.js API routes"
 
 Claude Swarm:
-  Phase 1: Opus 4.6 decomposes task into dependency graph
-  Phase 2: Parallel agents execute subtasks with live dashboard
-  Phase 3: Results summary with costs and session replay
+  Phase 1:   Opus 4.6 decomposes task into dependency graph
+  Phase 2:   Parallel agents execute subtasks with live dashboard
+  Phase 2.5: Opus 4.6 Quality Gate reviews all agent outputs
+  Phase 3:   Results summary with costs and session replay
 ```
 
 1. **Task Decomposition** — Describe a complex task. Opus 4.6 analyzes your codebase and breaks it into a dependency graph of subtasks
 2. **Parallel Agent Spawning** — Independent subtasks run simultaneously via Claude Agent SDK. Dependent tasks wait.
 3. **Real-time Coordination** — File conflict detection prevents agents from stepping on each other. Budget enforcement stops runaway costs.
-4. **Rich Terminal UI** — `htop`-style dashboard showing agent progress, tool usage, costs, and file conflicts in real-time
-5. **Session Replay** — Every swarm execution is recorded. Replay any session to review what each agent did.
+4. **Opus Quality Gate** — After agents complete, Opus 4.6 reviews the combined output for correctness, consistency, and completeness
+5. **Rich Terminal UI** — `htop`-style dashboard showing agent progress, tool usage, costs, and file conflicts in real-time
+6. **Session Replay** — Every swarm execution is recorded. Replay any session to review what each agent did.
 
 ## Quick Start
 
 ```bash
-# Install from PyPI
+# See it in action instantly (no API key needed!)
 pip install claude-swarm
+claude-swarm --demo
 
-# Or from source
+# Or install from source
 git clone https://github.com/affaan-m/claude-swarm
 cd claude-swarm
 pip install -e .
 
-# Set your API key
+# Set your API key for real usage
 export ANTHROPIC_API_KEY="sk-ant-..."
 
 # Run a swarm
@@ -46,8 +49,11 @@ claude-swarm "Refactor auth module from Express middleware to Next.js API routes
 # Dry run (shows plan without executing)
 claude-swarm --dry-run "Add user authentication with JWT"
 
-# Custom budget and agent count
-claude-swarm --budget 3.0 --max-agents 6 "Build a REST API for user management"
+# Custom budget, agents, and retries
+claude-swarm --budget 3.0 --max-agents 6 --retry 2 "Build a REST API for user management"
+
+# Disable quality gate for faster execution
+claude-swarm --no-quality-gate "Quick fix: update README"
 ```
 
 ## Architecture
@@ -83,6 +89,13 @@ claude-swarm --budget 3.0 --max-agents 6 "Build a REST API for user management"
 │  │                                          │  │
 │  │  File Locks: {auth.ts -> Agent 1}       │  │
 │  │  Budget: $0.23 / $5.00                  │  │
+│  │  Retries: task-2 (attempt 2/3)          │  │
+│  └──────────────────────────────────────────┘  │
+│                                                │
+│  Phase 2.5: Quality Gate                       │
+│  ┌──────────────────────────────────────────┐  │
+│  │  Opus 4.6 reviews combined agent output  │  │
+│  │  Score: 8/10 | Verdict: PASS            │  │
 │  └──────────────────────────────────────────┘  │
 │                                                │
 │  Phase 3: Results                              │
@@ -101,7 +114,10 @@ claude-swarm --budget 3.0 --max-agents 6 "Build a REST API for user management"
 | **File conflict detection** | Pessimistic file locking prevents agents from editing the same file simultaneously |
 | **Budget enforcement** | Hard cost limit — cancels remaining tasks when budget is exceeded |
 | **Cost tracking** | Real-time per-agent and total cost monitoring |
-| **Smart model selection** | Opus 4.6 for planning/decomposition, Haiku for worker agents (3x cheaper) |
+| **Opus Quality Gate** | Phase 2.5 — Opus 4.6 reviews all agent outputs for correctness and consistency |
+| **Smart model selection** | Opus 4.6 for planning + quality review, Haiku for worker agents (3x cheaper) |
+| **Task retry** | Failed tasks are automatically retried with configurable attempt limits |
+| **Demo mode** | `--demo` flag shows animated TUI without API key (great for presentations) |
 | **Session recording** | Every swarm execution recorded as JSONL events |
 | **Session replay** | `claude-swarm replay <id>` to review what each agent did |
 | **YAML config** | Declarative swarm topologies via `swarm.yaml` |
@@ -118,8 +134,11 @@ Options:
   -n, --max-agents INTEGER  Max concurrent agents (default: 4)
   -m, --model TEXT          Decomposition model (default: opus)
   -b, --budget FLOAT        Max budget in USD (default: 5.0)
+  -r, --retry INTEGER       Max retries for failed tasks (default: 1)
   -c, --config PATH         Path to swarm.yaml
+  --demo                    Run demo simulation (no API key needed)
   --dry-run                 Show plan without executing
+  --quality-gate/--no-quality-gate  Enable/disable Opus quality review (default: on)
   --no-ui                   Disable rich terminal UI
   -v, --version             Show version
 
@@ -167,12 +186,18 @@ Claude Swarm auto-detects `swarm.yaml` or `.claude/swarm.yaml` in your project.
 
 ## How Opus 4.6 Is Used
 
-Claude Swarm demonstrates strategic model selection:
+Claude Swarm demonstrates strategic model selection with **two critical Opus 4.6 touchpoints**:
 
-- **Opus 4.6** handles task decomposition — the hardest reasoning task. It analyzes your codebase, understands the architecture, identifies dependencies between subtasks, and produces a parallelizable execution plan. This is where deep reasoning matters most.
-- **Haiku** handles worker agent execution — the parallelizable work. Each agent follows focused instructions from the plan. Using Haiku here is 3x cheaper while maintaining 90% of Sonnet's capability.
+### Phase 1: Task Decomposition (Planning)
+Opus 4.6 handles the hardest reasoning task — analyzing your codebase, understanding the architecture, identifying dependencies between subtasks, and producing a parallelizable execution plan. This requires deep understanding of code relationships and optimal task splitting.
 
-This mirrors real engineering team structure: a senior architect designs the plan, junior engineers execute the pieces in parallel.
+### Phase 2: Worker Execution
+Haiku handles the parallelizable work — each agent follows focused instructions from the plan. Using Haiku here is 3x cheaper while maintaining 90% of Sonnet's capability for focused tasks.
+
+### Phase 2.5: Quality Gate (Review)
+After all agents complete, Opus 4.6 reviews the combined output. It checks for integration issues between agents' work, missed edge cases, security concerns, and whether the original task was fully addressed. This catches problems that individual agents can't see.
+
+This mirrors real engineering team structure: **a senior architect designs the plan, junior engineers execute in parallel, and the senior reviews the combined result**.
 
 ## Tech Stack
 
@@ -191,7 +216,7 @@ git clone https://github.com/affaan-m/claude-swarm
 cd claude-swarm
 pip install -e ".[dev]"
 
-# Run tests
+# Run tests (44 passing)
 pytest tests/ -v
 
 # Lint
@@ -202,13 +227,15 @@ ruff check src/ tests/
 
 ```
 src/claude_swarm/
-  cli.py          CLI entry point (Click group + subcommands)
-  types.py        Core dataclasses (SwarmTask, SwarmPlan, etc.)
-  decomposer.py   Opus 4.6 task decomposition
-  orchestrator.py  Parallel execution with file locks + budget
-  config.py       YAML swarm topology configuration
-  session.py      JSONL event recording and replay
-  ui.py           Rich terminal dashboard
+  cli.py           CLI entry point (Click group + subcommands)
+  types.py         Core dataclasses (SwarmTask, SwarmPlan, etc.)
+  decomposer.py    Opus 4.6 task decomposition
+  orchestrator.py  Parallel execution with file locks, budget, retries
+  quality_gate.py  Opus 4.6 quality review of agent outputs
+  demo.py          Demo simulation with animated TUI
+  config.py        YAML swarm topology configuration
+  session.py       JSONL event recording and replay
+  ui.py            Rich terminal dashboard
 ```
 
 ## License

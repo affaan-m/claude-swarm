@@ -195,6 +195,63 @@ class SwarmUI:
             self._live.stop()
             self._live = None
 
+    def print_quality_report(self, report: Any) -> None:
+        """Print the Opus quality gate report."""
+        # Score color based on value
+        score = report.overall_score
+        if score >= 8:
+            score_style = "bold green"
+        elif score >= 5:
+            score_style = "bold yellow"
+        else:
+            score_style = "bold red"
+
+        verdict_style = {
+            "pass": "bold green",
+            "needs_revision": "bold yellow",
+            "fail": "bold red",
+        }.get(report.verdict, "bold white")
+
+        self.console.print()
+        self.console.print(
+            Panel(
+                f"[{score_style}]Score: {score}/10[/{score_style}]  |  "
+                f"[{verdict_style}]Verdict: {report.verdict.upper()}[/{verdict_style}]  |  "
+                f"[dim]Review cost: ${report.review_cost_usd:.4f}[/dim]\n\n"
+                f"{report.summary}",
+                title="[bold magenta]Opus 4.6 Quality Gate[/bold magenta]",
+            )
+        )
+
+        if report.integration_issues:
+            self.console.print("[yellow]Integration Issues:[/yellow]")
+            for issue in report.integration_issues:
+                self.console.print(f"  [yellow]![/yellow] {issue}")
+
+        if report.missing_items:
+            self.console.print("[red]Missing Items:[/red]")
+            for item in report.missing_items:
+                self.console.print(f"  [red]-[/red] {item}")
+
+        if report.task_reviews:
+            review_table = Table(title="Per-Task Reviews", show_lines=True)
+            review_table.add_column("Task", style="cyan", width=10)
+            review_table.add_column("Score", width=6, justify="center")
+            review_table.add_column("Issues")
+            review_table.add_column("Suggestions")
+
+            for tr in report.task_reviews:
+                issues = "; ".join(tr.issues[:2]) if tr.issues else "-"
+                suggestions = "; ".join(tr.suggestions[:2]) if tr.suggestions else "-"
+                review_table.add_row(
+                    tr.task_id,
+                    str(tr.score),
+                    issues[:60],
+                    suggestions[:60],
+                )
+
+            self.console.print(review_table)
+
     def print_results(self, result: Any) -> None:
         """Print final results summary."""
         self.console.print()

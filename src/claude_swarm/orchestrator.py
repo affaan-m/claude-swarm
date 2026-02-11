@@ -54,6 +54,7 @@ class SwarmOrchestrator:
         on_update: OnUpdate | None = None,
         on_agent_event: OnAgentEvent | None = None,
         recorder: SessionRecorder | None = None,
+        max_retries: int = 1,
     ) -> None:
         self.plan = plan
         self.cwd = cwd
@@ -62,6 +63,7 @@ class SwarmOrchestrator:
         self.on_update = on_update or (lambda: None)
         self.on_agent_event = on_agent_event or (lambda *_: None)
         self.recorder = recorder
+        self.max_retries = max_retries
 
         # State tracking
         self.agents: dict[str, SwarmAgent] = {}
@@ -70,6 +72,9 @@ class SwarmOrchestrator:
         self.total_cost: float = 0.0
         self.start_time: float = 0.0
         self._budget_exceeded: bool = False
+
+        # Retry tracking: task_id -> attempt count
+        self._retry_counts: dict[str, int] = {}
 
         # Map file paths to agent IDs currently modifying them
         self._file_locks: dict[str, str] = {}
@@ -207,12 +212,29 @@ class SwarmOrchestrator:
                 )
 
         except Exception as exc:
-            task.status = TaskStatus.FAILED
-            task.error = str(exc)
-            agent.status = AgentStatus.FAILED
-            self.on_agent_event(agent_id, "failed", {"error": str(exc)})
-            if self.recorder:
-                self.recorder.record_agent_failed(agent_id, task.id, str(exc))
+            # Check if we can retry
+            attempt = self._retry_counts.get(task.id, 0) + 1
+            self._retry_counts[task.id] = attempt
+
+            if attempt < self.max_retries:
+                # Reset task for retry
+                task.status = TaskStatus.PENDING
+                task.error = None
+                agent.status = AgentStatus.FAILED
+                self.on_agent_event(
+                    agent_id, "retry", {"error": str(exc), "attempt": attempt}
+                )
+                if self.recorder:
+                    self.recorder.record_agent_failed(
+                        agent_id, task.id, f"Retry {attempt}: {exc}"
+                    )
+            else:
+                task.status = TaskStatus.FAILED
+                task.error = str(exc)
+                agent.status = AgentStatus.FAILED
+                self.on_agent_event(agent_id, "failed", {"error": str(exc)})
+                if self.recorder:
+                    self.recorder.record_agent_failed(agent_id, task.id, str(exc))
 
         finally:
             self._unlock_files(task)

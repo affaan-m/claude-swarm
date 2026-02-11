@@ -21,6 +21,9 @@ from . import __version__
 @click.option("--no-ui", is_flag=True, help="Disable rich terminal UI")
 @click.option("--budget", "-b", default=5.0, help="Maximum total budget in USD (default: 5.0)")
 @click.option("--config", "-c", default=None, help="Path to swarm.yaml config file")
+@click.option("--demo", is_flag=True, help="Run a demo simulation (no API key needed)")
+@click.option("--quality-gate/--no-quality-gate", default=True, help="Enable/disable Opus quality review (default: enabled)")
+@click.option("--retry", "-r", default=1, help="Max retries for failed tasks (default: 1)")
 @click.option("--version", "-v", is_flag=True, help="Show version")
 @click.pass_context
 def main(
@@ -33,6 +36,9 @@ def main(
     no_ui: bool,
     budget: float,
     config: str | None,
+    demo: bool,
+    quality_gate: bool,
+    retry: int,
     version: bool,
 ) -> None:
     """Claude Swarm — Multi-agent orchestration for Claude Code.
@@ -43,6 +49,7 @@ def main(
     Example:
         claude-swarm "Refactor auth module from Express to Next.js API routes"
         claude-swarm --dry-run "Add user authentication"
+        claude-swarm --demo  # See a live demo (no API key needed)
         claude-swarm sessions  # List past sessions
     """
     # If a subcommand was invoked, let it handle things
@@ -53,15 +60,24 @@ def main(
         click.echo(f"claude-swarm v{__version__}")
         return
 
+    # Demo mode — no API key required
+    if demo:
+        from .demo import run_demo
+
+        asyncio.run(run_demo(prompt=task))
+        return
+
     if not task:
         click.echo("Usage: claude-swarm <task description>")
         click.echo("       claude-swarm --help for options")
+        click.echo("       claude-swarm --demo  # Live demo")
         click.echo("       claude-swarm sessions  # List past sessions")
         return
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
         click.echo("Error: ANTHROPIC_API_KEY environment variable not set.")
         click.echo("Get your key at: https://console.anthropic.com/settings/keys")
+        click.echo("Tip: Use --demo for a simulated run without an API key")
         sys.exit(1)
 
     resolved_cwd = os.path.abspath(cwd)
@@ -76,6 +92,8 @@ def main(
             no_ui=no_ui,
             budget=budget,
             config_path=config,
+            quality_gate=quality_gate,
+            max_retries=retry,
         )
     )
 
@@ -142,6 +160,10 @@ def replay(session_id: str) -> None:
             console.print(f"{ts} [red]AGENT FAIL[/red]   {agent}: {data.get('error', '')[:60]}")
         elif etype == "file_conflict":
             console.print(f"{ts} [yellow]CONFLICT[/yellow]     {data.get('file_path', '')} ({data.get('agent_ids', [])})")
+        elif etype == "quality_gate":
+            score = data.get("overall_score", "?")
+            verdict = data.get("verdict", "?")
+            console.print(f"{ts} [bold magenta]QUALITY GATE[/bold magenta]  Score: {score}/10 | Verdict: {verdict}")
         elif etype == "session_completed":
             console.print(f"{ts} [bold green]SESSION END[/bold green]   Total cost: ${data.get('total_cost_usd', 0):.4f}")
 
@@ -157,6 +179,8 @@ async def _run_swarm(
     no_ui: bool,
     budget: float,
     config_path: str | None = None,
+    quality_gate: bool = True,
+    max_retries: int = 1,
 ) -> None:
     """Main async entry point for the swarm."""
     from .config import SwarmConfig, find_config
@@ -211,7 +235,13 @@ async def _run_swarm(
         f"\n[bold]Ready to execute {plan.task_count} tasks "
         f"with up to {max_agents} concurrent agents.[/bold]"
     )
-    ui.console.print(f"[dim]Budget limit: ${budget:.2f} | Session: {recorder.session_id}[/dim]")
+    features = []
+    if quality_gate:
+        features.append("quality gate")
+    if max_retries > 1:
+        features.append(f"up to {max_retries} retries")
+    feature_str = f" | Features: {', '.join(features)}" if features else ""
+    ui.console.print(f"[dim]Budget: ${budget:.2f} | Session: {recorder.session_id}{feature_str}[/dim]")
 
     # Phase 2: Execute
     ui.console.print("\n[bold blue]Phase 2:[/bold blue] Executing swarm...")
@@ -222,6 +252,7 @@ async def _run_swarm(
         max_concurrent=max_agents,
         max_budget_usd=budget,
         recorder=recorder,
+        max_retries=max_retries,
     )
 
     if no_ui:
@@ -244,19 +275,49 @@ async def _run_swarm(
         finally:
             ui.stop_live()
 
+    # Phase 2.5: Quality Gate (Opus reviews agent outputs)
+    quality_report = None
+    if quality_gate and result.completed_tasks:
+        ui.console.print("\n[bold magenta]Phase 2.5:[/bold magenta] Opus 4.6 Quality Gate...")
+        try:
+            from .quality_gate import run_quality_gate
+
+            quality_report = await run_quality_gate(result=result, cwd=cwd, model=model)
+            result.total_cost_usd += quality_report.review_cost_usd
+            recorder._record_event(
+                "quality_gate",
+                data={
+                    "overall_score": quality_report.overall_score,
+                    "verdict": quality_report.verdict,
+                    "summary": quality_report.summary,
+                    "review_cost_usd": quality_report.review_cost_usd,
+                },
+            )
+        except Exception as exc:
+            ui.console.print(f"[yellow]Quality gate skipped: {exc}[/yellow]")
+
     # Phase 3: Results
     ui.console.print("\n[bold blue]Phase 3:[/bold blue] Results")
     ui.print_results(result)
 
+    # Print quality report if available
+    if quality_report:
+        ui.print_quality_report(quality_report)
+
     # Save session
-    session_path = recorder.finish({
+    session_data = {
         "completed": len(result.completed_tasks),
         "failed": len(result.failed_tasks),
         "total_cost_usd": result.total_cost_usd,
         "total_duration_ms": result.total_duration_ms,
         "agents_used": result.agents_used,
         "conflicts": len(result.conflicts),
-    })
+    }
+    if quality_report:
+        session_data["quality_score"] = quality_report.overall_score
+        session_data["quality_verdict"] = quality_report.verdict
+
+    session_path = recorder.finish(session_data)
     ui.console.print(f"[dim]Session saved: {session_path}[/dim]")
     ui.console.print(f"[dim]Replay with: claude-swarm replay {recorder.session_id}[/dim]")
 
