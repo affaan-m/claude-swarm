@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "claude-swarm"
-version = "0.1.0"
+version = "0.2.0"
 description = "Multi-agent orchestration for Claude Code — decompose tasks, coordinate agents, visualize everything"
 readme = "README.md"
 license = "MIT"
