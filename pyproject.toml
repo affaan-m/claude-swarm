@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "claude-swarm"
+version = "0.1.0"
+description = "Multi-agent orchestration for Claude Code — decompose tasks, coordinate agents, visualize everything"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Affaan Mustafa", email = "affaan@hey.com" },
+]
+keywords = ["claude-code", "agents", "orchestration", "swarm", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "claude-agent-sdk>=0.1.35",
+    "textual>=1.0.0",
+    "rich>=13.0.0",
+    "networkx>=3.0",
+    "anyio>=4.0",
+    "click>=8.0",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-anyio>=0.0.0",
+    "ruff>=0.8.0",
+    "mypy>=1.0",
+]
+
+[project.scripts]
+claude-swarm = "claude_swarm.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/affaan-m/claude-swarm"
+Repository = "https://github.com/affaan-m/claude-swarm"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/claude_swarm"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
