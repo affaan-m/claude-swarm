@@ -9,7 +9,6 @@ from rich.console import Console
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 from rich.text import Text
 
@@ -18,7 +17,6 @@ from .types import (
     FileConflict,
     SwarmAgent,
     SwarmPlan,
-    SwarmTask,
     TaskStatus,
 )
 
@@ -83,7 +81,6 @@ class SwarmUI:
         self.console.print("[bold]Execution Order:[/bold]")
         for i, group in enumerate(groups):
             prefix = "  " if i > 0 else ""
-            arrow = " --> " if i > 0 else "  "
             tasks_str = " | ".join(f"[cyan]{tid}[/cyan]" for tid in group)
             self.console.print(f"{prefix}Wave {i + 1}: [{tasks_str}]")
 

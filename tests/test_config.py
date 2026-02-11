@@ -1,6 +1,6 @@
 """Tests for YAML configuration loading."""
 
-from claude_swarm.config import AgentConfig, SwarmConfig
+from claude_swarm.config import SwarmConfig
 
 
 def test_config_from_dict_minimal() -> None:

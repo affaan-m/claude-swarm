@@ -1,8 +1,7 @@
 """Tests for the demo simulation module."""
 
-import asyncio
 
-from claude_swarm.demo import _build_demo_plan, DEMO_SCENARIOS
+from claude_swarm.demo import DEMO_SCENARIOS, _build_demo_plan
 
 
 def test_build_demo_plan_auth() -> None:

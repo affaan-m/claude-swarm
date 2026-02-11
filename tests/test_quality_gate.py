@@ -3,8 +3,6 @@
 import json
 
 from claude_swarm.quality_gate import (
-    QualityReport,
-    TaskReview,
     _build_task_summaries,
     _extract_json,
     _parse_quality_report,

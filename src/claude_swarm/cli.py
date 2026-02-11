@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import sys
 
@@ -22,7 +21,10 @@ from . import __version__
 @click.option("--budget", "-b", default=5.0, help="Maximum total budget in USD (default: 5.0)")
 @click.option("--config", "-c", default=None, help="Path to swarm.yaml config file")
 @click.option("--demo", is_flag=True, help="Run a demo simulation (no API key needed)")
-@click.option("--quality-gate/--no-quality-gate", default=True, help="Enable/disable Opus quality review (default: enabled)")
+@click.option(
+    "--quality-gate/--no-quality-gate", default=True,
+    help="Enable/disable Opus quality review (default: enabled)",
+)
 @click.option("--retry", "-r", default=1, help="Max retries for failed tasks (default: 1)")
 @click.option("--version", "-v", is_flag=True, help="Show version")
 @click.pass_context
@@ -142,30 +144,46 @@ def replay(session_id: str) -> None:
         task = event.get("task_id", "")
         data = event.get("data", {})
 
+        prompt_preview = data.get("prompt", "")[:60]
         if etype == "session_started":
-            console.print(f"{ts} [bold green]SESSION START[/bold green] {data.get('prompt', '')[:60]}")
+            console.print(f"{ts} [bold green]SESSION START[/bold green] {prompt_preview}")
         elif etype == "plan_created":
-            task_count = len(data.get("tasks", []))
-            console.print(f"{ts} [bold blue]PLAN CREATED[/bold blue] {task_count} tasks")
+            n = len(data.get("tasks", []))
+            console.print(f"{ts} [bold blue]PLAN CREATED[/bold blue] {n} tasks")
         elif etype == "agent_started":
-            console.print(f"{ts} [green]AGENT START[/green]  {agent} -> {task} ({data.get('description', '')[:40]})")
+            desc = data.get("description", "")[:40]
+            console.print(
+                f"{ts} [green]AGENT START[/green]  {agent} -> {task} ({desc})"
+            )
         elif etype == "tool_use":
             tool = data.get("tool", "?")
             console.print(f"{ts} [cyan]TOOL USE[/cyan]     {agent}: {tool}")
         elif etype == "agent_completed":
             cost = data.get("cost_usd", 0)
             dur = data.get("duration_ms", 0)
-            console.print(f"{ts} [green]AGENT DONE[/green]   {agent} (${cost:.4f}, {dur}ms)")
+            console.print(
+                f"{ts} [green]AGENT DONE[/green]   {agent} (${cost:.4f}, {dur}ms)"
+            )
         elif etype == "agent_failed":
-            console.print(f"{ts} [red]AGENT FAIL[/red]   {agent}: {data.get('error', '')[:60]}")
+            err = data.get("error", "")[:60]
+            console.print(f"{ts} [red]AGENT FAIL[/red]   {agent}: {err}")
         elif etype == "file_conflict":
-            console.print(f"{ts} [yellow]CONFLICT[/yellow]     {data.get('file_path', '')} ({data.get('agent_ids', [])})")
+            fp = data.get("file_path", "")
+            aids = data.get("agent_ids", [])
+            console.print(f"{ts} [yellow]CONFLICT[/yellow]     {fp} ({aids})")
         elif etype == "quality_gate":
             score = data.get("overall_score", "?")
             verdict = data.get("verdict", "?")
-            console.print(f"{ts} [bold magenta]QUALITY GATE[/bold magenta]  Score: {score}/10 | Verdict: {verdict}")
+            console.print(
+                f"{ts} [bold magenta]QUALITY GATE[/bold magenta]"
+                f"  Score: {score}/10 | Verdict: {verdict}"
+            )
         elif etype == "session_completed":
-            console.print(f"{ts} [bold green]SESSION END[/bold green]   Total cost: ${data.get('total_cost_usd', 0):.4f}")
+            total = data.get("total_cost_usd", 0)
+            console.print(
+                f"{ts} [bold green]SESSION END[/bold green]"
+                f"   Total cost: ${total:.4f}"
+            )
 
     console.print()
 
@@ -219,7 +237,12 @@ async def _run_swarm(
     # Record the plan
     recorder.record_plan({
         "tasks": [
-            {"id": t.id, "description": t.description, "agent_type": t.agent_type, "dependencies": t.dependencies}
+            {
+                "id": t.id,
+                "description": t.description,
+                "agent_type": t.agent_type,
+                "dependencies": t.dependencies,
+            }
             for t in plan.tasks
         ]
     })
@@ -241,7 +264,8 @@ async def _run_swarm(
     if max_retries > 1:
         features.append(f"up to {max_retries} retries")
     feature_str = f" | Features: {', '.join(features)}" if features else ""
-    ui.console.print(f"[dim]Budget: ${budget:.2f} | Session: {recorder.session_id}{feature_str}[/dim]")
+    budget_line = f"Budget: ${budget:.2f} | Session: {recorder.session_id}{feature_str}"
+    ui.console.print(f"[dim]{budget_line}[/dim]")
 
     # Phase 2: Execute
     ui.console.print("\n[bold blue]Phase 2:[/bold blue] Executing swarm...")

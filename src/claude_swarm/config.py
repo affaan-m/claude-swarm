@@ -35,7 +35,6 @@ Example swarm.yaml:
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -55,7 +54,9 @@ class AgentConfig:
     name: str
     description: str
     model: str = "haiku"
-    tools: list[str] = field(default_factory=lambda: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"])
+    tools: list[str] = field(
+        default_factory=lambda: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
+    )
     prompt: str = ""
 
 

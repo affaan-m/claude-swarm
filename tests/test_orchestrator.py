@@ -1,5 +1,6 @@
 """Tests for the SwarmOrchestrator (non-SDK-dependent logic)."""
 
+from claude_swarm.orchestrator import SwarmOrchestrator
 from claude_swarm.types import (
     AgentStatus,
     SwarmAgent,
@@ -7,7 +8,6 @@ from claude_swarm.types import (
     SwarmTask,
     TaskStatus,
 )
-from claude_swarm.orchestrator import SwarmOrchestrator
 
 
 def _make_plan(tasks: list[SwarmTask]) -> SwarmPlan:
@@ -89,7 +89,9 @@ def test_no_conflict_when_different_files() -> None:
     ]
     orch = SwarmOrchestrator(plan=_make_plan(tasks), cwd="/tmp")
     orch._file_locks["src/auth.ts"] = "agent-a"
-    orch.agents["agent-a"] = SwarmAgent(id="agent-a", name="coder-a", task_id="a", status=AgentStatus.WORKING)
+    orch.agents["agent-a"] = SwarmAgent(
+        id="agent-a", name="coder-a", task_id="a", status=AgentStatus.WORKING
+    )
 
     conflict = orch._check_file_conflict(tasks[1])
     assert conflict is None
@@ -112,16 +114,25 @@ def test_cancel_pending_tasks() -> None:
 
 def test_active_agent_count() -> None:
     orch = SwarmOrchestrator(plan=_make_plan([]), cwd="/tmp")
-    orch.agents["a1"] = SwarmAgent(id="a1", name="coder-1", task_id="t1", status=AgentStatus.WORKING)
-    orch.agents["a2"] = SwarmAgent(id="a2", name="coder-2", task_id="t2", status=AgentStatus.COMPLETED)
-    orch.agents["a3"] = SwarmAgent(id="a3", name="coder-3", task_id="t3", status=AgentStatus.WORKING)
+    orch.agents["a1"] = SwarmAgent(
+        id="a1", name="coder-1", task_id="t1", status=AgentStatus.WORKING
+    )
+    orch.agents["a2"] = SwarmAgent(
+        id="a2", name="coder-2", task_id="t2", status=AgentStatus.COMPLETED
+    )
+    orch.agents["a3"] = SwarmAgent(
+        id="a3", name="coder-3", task_id="t3", status=AgentStatus.WORKING
+    )
     assert orch.active_agent_count == 2
 
 
 def test_update_blocked_tasks() -> None:
     tasks = [
         SwarmTask(id="a", description="A", agent_type="coder"),
-        SwarmTask(id="b", description="B", agent_type="reviewer", dependencies=["a"], status=TaskStatus.BLOCKED),
+        SwarmTask(
+            id="b", description="B", agent_type="reviewer",
+            dependencies=["a"], status=TaskStatus.BLOCKED,
+        ),
     ]
     orch = SwarmOrchestrator(plan=_make_plan(tasks), cwd="/tmp")
     orch.completed_task_ids.add("a")

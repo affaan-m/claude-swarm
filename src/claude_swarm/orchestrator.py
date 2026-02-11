@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 import uuid
 from collections.abc import Callable
 from typing import Any
 
 import anyio
-from claude_agent_sdk import AgentDefinition, ClaudeAgentOptions, query
+from claude_agent_sdk import ClaudeAgentOptions, query
 from claude_agent_sdk.types import (
     AssistantMessage,
     HookContext,
@@ -103,7 +102,10 @@ class SwarmOrchestrator:
                 if self.total_cost >= self.max_budget_usd and not self._budget_exceeded:
                     self._budget_exceeded = True
                     self._cancel_pending_tasks(
-                        reason=f"Budget exceeded: ${self.total_cost:.4f} >= ${self.max_budget_usd:.2f}"
+                        reason=(
+                            f"Budget exceeded: ${self.total_cost:.4f}"
+                            f" >= ${self.max_budget_usd:.2f}"
+                        )
                     )
                     self.on_update()
                     # Wait for running agents to finish, but don't launch new ones

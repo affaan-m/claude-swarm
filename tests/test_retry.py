@@ -1,13 +1,10 @@
 """Tests for retry logic in the orchestrator."""
 
+from claude_swarm.orchestrator import SwarmOrchestrator
 from claude_swarm.types import (
-    AgentStatus,
-    SwarmAgent,
     SwarmPlan,
     SwarmTask,
-    TaskStatus,
 )
-from claude_swarm.orchestrator import SwarmOrchestrator
 
 
 def _make_plan(tasks: list[SwarmTask]) -> SwarmPlan:

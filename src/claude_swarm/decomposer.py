@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Any
 
-from claude_agent_sdk import AgentDefinition, ClaudeAgentOptions, query
+from claude_agent_sdk import ClaudeAgentOptions, query
 from claude_agent_sdk.types import AssistantMessage, ResultMessage, TextBlock
 
 from .types import SwarmPlan, SwarmTask, TaskStatus
 
-DECOMPOSE_SYSTEM_PROMPT = """You are a task decomposition expert. Given a complex software engineering task, break it down into independent subtasks that can be executed by separate Claude Code agents in parallel.
+DECOMPOSE_SYSTEM_PROMPT = """You are a task decomposition expert. \
+Given a complex software engineering task, break it down into \
+independent subtasks that can be executed by separate Claude Code \
+agents in parallel.
 
 RULES:
 1. Each subtask should be as independent as possible
@@ -78,7 +80,8 @@ PROJECT DIRECTORY: {cwd}
 TASK TO DECOMPOSE:
 {prompt}
 
-First, explore the codebase to understand the structure. Then output your decomposition as a JSON code block.
+First, explore the codebase to understand the structure. \
+Then output your decomposition as a JSON code block.
 """
 
     collected_text = ""

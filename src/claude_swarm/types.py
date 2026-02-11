@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     """Status of a swarm task."""
 
     PENDING = "pending"
@@ -18,7 +18,7 @@ class TaskStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class AgentStatus(str, Enum):
+class AgentStatus(StrEnum):
     """Status of a swarm agent."""
 
     IDLE = "idle"

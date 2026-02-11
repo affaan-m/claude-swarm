@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import random
-import time
 
 from .types import (
     AgentStatus,
@@ -32,7 +31,10 @@ DEMO_SCENARIOS = {
                 "description": "Create Next.js API route handlers for login/logout/register",
                 "agent_type": "coder",
                 "dependencies": [],
-                "files_to_modify": ["src/app/api/auth/login/route.ts", "src/app/api/auth/register/route.ts"],
+                "files_to_modify": [
+                    "src/app/api/auth/login/route.ts",
+                    "src/app/api/auth/register/route.ts",
+                ],
                 "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
             },
             {
@@ -85,7 +87,10 @@ DEMO_SCENARIOS = {
                 "description": "Implement CRUD API endpoints",
                 "agent_type": "coder",
                 "dependencies": ["task-1"],
-                "files_to_modify": ["src/app/api/users/route.ts", "src/app/api/users/[id]/route.ts"],
+                "files_to_modify": [
+                    "src/app/api/users/route.ts",
+                    "src/app/api/users/[id]/route.ts",
+                ],
                 "tools": ["Read", "Write", "Edit", "Bash"],
             },
             {
@@ -252,4 +257,6 @@ async def run_demo(
 
     ui.console.print("\n[bold blue]Phase 3:[/bold blue] Results")
     ui.print_results(result)
-    ui.console.print("[dim italic]This was a demo simulation — no API calls were made.[/dim italic]\n")
+    ui.console.print(
+        "[dim italic]This was a demo simulation — no API calls were made.[/dim italic]\n"
+    )

@@ -20,7 +20,7 @@ def test_session_recorder_lifecycle() -> None:
             recorder.record_tool_use("agent-1", "t1", "Read", {"file_path": "/tmp/test.py"})
             recorder.record_agent_completed("agent-1", "t1", cost=0.05, duration_ms=5000)
 
-            session_path = recorder.finish({"completed": 1, "total_cost_usd": 0.05})
+            recorder.finish({"completed": 1, "total_cost_usd": 0.05})
 
             # Verify files were created
             session_dir = Path(tmpdir) / "test-session-001"
@@ -37,7 +37,8 @@ def test_session_recorder_lifecycle() -> None:
 
             # Verify events
             events = load_session_events("test-session-001")
-            # session_started + plan_created + agent_started + tool_use + agent_completed + session_completed
+            # session_started + plan_created + agent_started
+            # + tool_use + agent_completed + session_completed
             assert len(events) == 6
 
 
